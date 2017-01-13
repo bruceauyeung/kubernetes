@@ -108,8 +108,7 @@ func (r *Reset) Run(out io.Writer) error {
 		fmt.Printf("[reset] Failed to unmount mounted directories in /var/lib/kubelet: %s\n", string(umountOutputBytes))
 	}
 
-	dockerCheck := preflight.ServiceCheck{Service: "docker"}
-	if warnings, errors := dockerCheck.Check(); len(warnings) == 0 && len(errors) == 0 {
+	if checkDockerService() {
 		fmt.Println("[reset] Removing kubernetes-managed containers")
 		if err := exec.Command("sh", "-c", "docker ps | grep 'k8s_' | awk '{print $1}' | xargs -r docker rm --force --volumes").Run(); err != nil {
 			fmt.Println("[reset] Failed to stop the running containers")
@@ -229,4 +228,19 @@ func resetConfigDir(configPathDir, pkiPathDir string) {
 			fmt.Printf("[reset] Failed to remove file: %q [%v]\n", path, err)
 		}
 	}
+}
+
+// checkDockerService checks whether docker or docker-latest service is active or not
+func checkDockerService() bool {
+	dockerCheck := preflight.ServiceCheck{Service: "docker", true}
+	if warnings, errors := dockerCheck.Check(); len(warnings) == 0 && len(errors) == 0 {
+		return true
+	}
+
+	// in CentOS 7, user may use a service named 'docker-latest' with higher docker version number than 'docker' service
+	dockerLatestCheck := preflight.ServiceCheck{Service: "docker-latest", true}
+	if warnings, errors := dockerLatestCheck.Check(); len(warnings) == 0 && len(errors) == 0 {
+		return true
+	}
+	return false
 }
